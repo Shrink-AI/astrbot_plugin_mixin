@@ -154,3 +154,6 @@ python tests/run_all.py
 ```
 
 测试用自造的假目标类，不包含任何第三方插件代码。
+## 许可证
+
+AGPL-3.0，见 [LICENSE](LICENSE)。
