@@ -10,8 +10,17 @@
       },
       "mixins": [
         {
+          "file": "mixins/audit.py",
+          "class": "Audit",
+          "priority": 1000,
+          "params": {
+            "level": "DEBUG"
+          }
+        },
+        {
           "path": "trace_mixin:TraceMixin",
           "enabled": true,
+          "priority": 500,
           "params": {
             "level": "DEBUG"
           }

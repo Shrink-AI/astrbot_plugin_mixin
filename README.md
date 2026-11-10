@@ -73,10 +73,61 @@ AstrBot/
 }
 ```
 
-- `mixins` 的顺序就是 MRO 顺序，写在前面的优先级更高；
+- `mixins` 的顺序就是 MRO 顺序，写在前面的优先级更高；也可以用 `priority`（大的在前）；
+- `path` 指向可导入的模块：类（`"trace_mixin:TraceMixin"`），`file` 指向一个 `.py` 文件（相对配置文件目录）；
 - `params` 两级合并：`targets[].params` → `mixins[].params`，后者覆盖前者；
 - `level` 支持 `"DEBUG"`/`"INFO"`，`INFO` 只留 `store`/`recall` 摘要，不刷逐条打分；
 - 单条配置写错只跳过那一条，其他目标照常。
+
+## 钩子：在你需要的位置做信息处理
+
+不想只打日志、而是想在**调用前 / 返回时 / 调用后**做自己的处理（统计、采样、落一份审计、判断要不要告警……），写一个 `HookMixin` 子类即可：
+
+```python
+from hook_mixin import HookMixin
+
+class Audit(HookMixin):
+    def on_before_remember(self, ctx):
+        print("进入", ctx["method"], "参数", ctx["args"], ctx["kwargs"])
+
+    def on_return_remember(self, ctx):
+        print("返回", ctx["result"], "耗时", ctx["elapsed_ms"])
+
+    def on_after_remember(self, ctx):
+        print("结束，是否异常：", "error" in ctx)
+
+    def on_error_remember(self, ctx):
+        print("出错了", ctx["error"])
+```
+
+放进 `mixins/audit.py`，配置里写文件路径：
+
+```json
+{
+  "module": "yourpkg.memory",
+  "class": "MemoryService",
+  "mixins": [{"file": "mixins/audit.py", "class": "Audit", "priority": 1000}]
+}
+```
+
+执行顺序：
+
+| 阶段 | 钩子 | 触发时机 | `ctx` 里有 |
+|---|---|---|---|
+| 调用前 | `on_before_<m>` | 方法体执行之前 | `method` `args` `kwargs` `self` |
+| 返回时 | `on_return_<m>` | 正常返回、**拿到返回值之后** | 上列 + `result` `elapsed_ms` |
+| 调用后 | `on_after_<m>` | 无论成功失败都会跑（相当于 finally） | 上列 + `error`（失败时） |
+| 出错时 | `on_error_<m>` | 方法抛出异常时 | 上列 + `error` |
+
+顺序是 `before → 方法体 → return → after`，失败时是 `before → 方法体(raises) → error → after`，然后异常原样抛出。
+
+三条约定：
+
+- **钩子只读**：不提供改值通道，包装器永远返回原实现的返回值；想改行为请用普通 mixin 覆盖方法。
+- **钩子不能弄坏目标**：钩子里抛异常会被捕获并记一条 `[mixin:hook]`，方法继续正常执行。
+- **一次返回算一次**：方法有多个 `return` 语句时，`on_return` 仍然只触发一次（在真正返回给调用方时）。要精确到"每个 return 语句"，那需要 `sys.monitoring` 级别的行级钩子，目前没做。
+
+方法名不用登记：`bind()` 会扫描你写的 `on_<阶段>_<方法>`，为目标类上真实存在的方法生成包装器，其余方法原样不动。
 
 ## 日志长什么样
 
