@@ -1,7 +1,7 @@
 name: astrbot_plugin_mixin
 display_name: 运行期插桩（mixin）
 desc: 不改目标插件源码，在运行时给它套 mixin 或给方法加日志；配置放在部署根目录，找不到会自动生成，改完保存即热更新。
-version: 0.2.0
+version: 0.3.0
 author: Shrink-AI
 repo: "https://github.com/Shrink-AI/astrbot_plugin_mixin"
 astrbot_version: ">=4.9.2"

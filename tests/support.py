@@ -11,6 +11,7 @@ for _p in (str(HERE), str(ROOT)):
         sys.path.insert(0, _p)
 
 SECRET = "不该出现在日志里的正文-9f3a"
+HOOK_EVENTS = []   # 钩子记录用：放在 support 里，避免 __main__ 与 import 出两份类
 
 
 class Capture(logging.Handler):

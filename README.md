@@ -77,6 +77,7 @@ AstrBot/
 - `path` 指向可导入的模块：类（`"trace_mixin:TraceMixin"`），`file` 指向一个 `.py` 文件（相对配置文件目录）；
 - `params` 两级合并：`targets[].params` → `mixins[].params`，后者覆盖前者；
 - `level` 支持 `"DEBUG"`/`"INFO"`，`INFO` 只留 `store`/`recall` 摘要，不刷逐条打分；
+- `log` 写字符串按 logger 名字解析（`"log": "my.memtrace"`），写 `null` 表示不接管、回落到模块 logger，不写则由管理器注入它自己的 logger；
 - 单条配置写错只跳过那一条，其他目标照常。
 
 ## 钩子：在你需要的位置做信息处理
@@ -128,6 +129,15 @@ class Audit(HookMixin):
 - **一次返回算一次**：方法有多个 `return` 语句时，`on_return` 仍然只触发一次（在真正返回给调用方时）。要精确到"每个 return 语句"，那需要 `sys.monitoring` 级别的行级钩子，目前没做。
 
 方法名不用登记：`bind()` 会扫描你写的 `on_<阶段>_<方法>`，为目标类上真实存在的方法生成包装器，其余方法原样不动。
+
+钩子想写自己的日志，用 `ctx["log"]`（和 `self.hook_log` 是同一个对象）：
+
+```python
+def on_before_store(self, ctx):
+    ctx["log"].debug("store 进来：%s", ctx["args"][0].get("id"))
+```
+
+它取的就是配置里那个 `log`：写名字 → 按名字 `getLogger`；写 `null` → 回落到 `memtrace.mixin`；不写 → 管理器注入的 logger。
 
 ## 日志长什么样
 

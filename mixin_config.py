@@ -81,6 +81,13 @@ def _as_level(value, default=logging.DEBUG):
     return default
 
 
+def _as_log(value):
+    """配置里写不了对象，允许写 logger 名字：`"log": "my.debug"`。"""
+    if isinstance(value, str) and value.strip():
+        return logging.getLogger(value.strip())
+    return value
+
+
 # ---- 解析 -------------------------------------------------------------------------------------------
 def _resolve_class(module_path, class_name):
     module = importlib.import_module(module_path)
@@ -323,7 +330,8 @@ def apply(config, log=None, base_dir=None):
                 log.warning("[mixin.config] %s 的 mixin %s 不可用: %s", label, spec, exc)
                 continue
             params = {**(item.get("params") or {}), **(entry.get("params") or {})}
-            params.setdefault("log", log)  # 配置里没法写对象，默认用管理器的 logger
+            params.setdefault("log", log)  # 没写 log 时用管理器的 logger
+            params["log"] = _as_log(params.get("log"))  # 写了名字就换成 logging.Logger
             if "level" in params:
                 params["level"] = _as_level(params["level"])
             configure = getattr(mixin, "configure", None)

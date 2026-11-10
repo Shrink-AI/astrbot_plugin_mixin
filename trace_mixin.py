@@ -80,6 +80,11 @@ class TraceMixin:
         """配置文件里的 params 在这里生效（level/log 等）。"""
         cls.params = {**cls.params, **(params or {})}
 
+    @property
+    def trace_log(self):
+        """当前生效的 logger；子类里可以直接 `self.trace_log.debug(...)`。"""
+        return TraceMixin.params.get("log") or _LOG
+
 
 for _name, (_level, _describe) in memtrace.SPECS.items():
     _async = _name in ("vector", "index_memory", "store", "remember", "recall_for", "_index")

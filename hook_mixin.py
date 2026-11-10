@@ -36,6 +36,11 @@ class HookMixin:
     def configure(cls, params):
         cls.params = {**cls.params, **(params or {})}
 
+    @property
+    def hook_log(self):
+        """当前生效的 logger；钩子里的 `ctx["log"]` 就是它。"""
+        return _logger_for(self)
+
     @classmethod
     def _hooked_methods(cls, base_cls):
         names = set()
@@ -65,6 +70,11 @@ class HookMixin:
         return bound
 
 
+def _logger_for(obj):
+    """按实例所在类找 logger：配置里的 params["log"] > 模块默认 logger。"""
+    return getattr(type(obj), "params", {}).get("log") or _LOG
+
+
 def _fire(self, prefix, name, ctx):
     hook = getattr(self, f"on_{prefix}_{name}", None)
     if hook is None:
@@ -72,13 +82,13 @@ def _fire(self, prefix, name, ctx):
     try:
         hook(ctx)
     except Exception as exc:
-        log = getattr(type(self), "params", {}).get("log") or _LOG
-        memtrace._emit(log, logging.ERROR, "[mixin:hook] on_%s_%s failed: %s: %s",
+        memtrace._emit(ctx["log"], logging.ERROR, "[mixin:hook] on_%s_%s failed: %s: %s",
                        prefix, name, type(exc).__name__, exc)
 
 
 def _ctx(self, name, args, kwargs):
-    return {"method": name, "self": self, "args": args, "kwargs": kwargs}
+    return {"method": name, "self": self, "args": args, "kwargs": kwargs,
+            "log": _logger_for(self)}
 
 
 def _make_wrapper(name, is_async, cell):
