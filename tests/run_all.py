@@ -11,7 +11,7 @@ for _p in (str(HERE), str(ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-MODULES = ["test_patch", "test_mixin", "test_config", "test_scan"]
+MODULES = ["test_patch", "test_mixin", "test_config", "test_scan", "test_hooks"]
 
 
 def main():
