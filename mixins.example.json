@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "targets": [
+    {
+      "module": "yourpkg.memory",
+      "class": "MemoryService",
+      "enabled": true,
+      "params": {
+        "level": "DEBUG"
+      },
+      "mixins": [
+        {
+          "path": "trace_mixin:TraceMixin",
+          "enabled": true,
+          "params": {
+            "level": "DEBUG"
+          }
+        }
+      ]
+    }
+  ]
+}
