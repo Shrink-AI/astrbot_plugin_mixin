@@ -26,12 +26,14 @@
 """
 
 import gc
+import hashlib
 import importlib
 import json
 import logging
 import os
 import sys
 import time
+import types
 from pathlib import Path
 
 _LOG = logging.getLogger("mixin.config")
@@ -116,6 +118,52 @@ def _rebind(base, traced):
                     continue
                 aliases.append((module, name))
     return aliases
+
+
+def _pick_mixin_class(module, entry):
+    name = entry.get("class")
+    if name:
+        cls = getattr(module, name, None)
+        if not isinstance(cls, type):
+            raise MixinConfigError(f"{module.__name__} 里没有类 {name}")
+        return cls
+    explicit = getattr(module, "MIXIN", None)
+    if isinstance(explicit, type):
+        return explicit
+    candidates = [
+        value for value in vars(module).values()
+        if isinstance(value, type) and value.__module__ == module.__name__
+        and (hasattr(value, "bind") or value.__name__.endswith("Mixin"))
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    raise MixinConfigError("无法确定 mixin 类，请在配置里写 \"class\"")
+
+
+def _load_mixin_file(path_text, base_dir, entry, log):
+    """加载 mixin 文件；相对路径以配置文件所在目录为基准。
+
+    每次都直接编译源码，不经过 __pycache__：同一秒内改两次文件时，
+    字节码缓存的 mtime 粒度会让它读到旧版本。
+    """
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = (Path(base_dir or Path.cwd()) / path).resolve()
+    if not path.is_file():
+        raise MixinConfigError(f"mixin 文件不存在: {path}")
+    name = f"_mixin_{hashlib.sha1(str(path).encode()).hexdigest()[:10]}"
+    module = types.ModuleType(name)
+    module.__file__ = str(path)
+    sys.modules[name] = module
+    try:
+        code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
+        exec(code, module.__dict__)
+    except Exception as exc:
+        sys.modules.pop(name, None)
+        raise MixinConfigError(f"加载 {path} 失败: {type(exc).__name__}: {exc}") from exc
+    if log is not None:
+        log.debug("[mixin.config] 已加载 mixin 文件 %s -> %s", path, name)
+    return _pick_mixin_class(module, entry)
 
 
 def _migrate(old, new):
@@ -233,7 +281,7 @@ def scan_config(plugin_dir=None, explicit=None, log=None):
 
 
 # ---- 应用 / 还原 ------------------------------------------------------------------------------------
-def apply(config, log=None):
+def apply(config, log=None, base_dir=None):
     """按配置重建子类。返回每个目标的执行摘要；单条失败不影响其他条目。"""
     log = log or _LOG
     uninstall(log=log)
@@ -257,13 +305,20 @@ def apply(config, log=None):
             results.append({"label": label, "status": "missing", "reason": str(exc)})
             continue
 
+        entries = [e for e in item.get("mixins") or [] if e.get("enabled", True)]
+        try:
+            entries.sort(key=lambda e: -int(e.get("priority") or 0))
+        except (TypeError, ValueError):
+            log.warning("[mixin.config] %s 的 priority 不是整数，保持原顺序", label)
+
         bases, applied = [], []
-        for entry in item.get("mixins") or []:
-            if not entry.get("enabled", True):
-                continue
-            spec = entry.get("path") or ""
+        for entry in entries:
+            spec = entry.get("file") or entry.get("path") or ""
             try:
-                mixin = _resolve_mixin(spec)
+                if entry.get("file"):
+                    mixin = _load_mixin_file(entry["file"], base_dir, entry, log)
+                else:
+                    mixin = _resolve_mixin(entry.get("path") or "")
             except Exception as exc:
                 log.warning("[mixin.config] %s 的 mixin %s 不可用: %s", label, spec, exc)
                 continue
@@ -278,8 +333,15 @@ def apply(config, log=None):
                 except Exception as exc:
                     log.warning("[mixin.config] %s 的 mixin %s configure 失败: %s", label, spec, exc)
                     continue
+            binder = getattr(mixin, "bind", None)   # HookMixin 之类的按目标绑定
+            if callable(binder):
+                try:
+                    mixin = binder(base)
+                except Exception as exc:
+                    log.warning("[mixin.config] %s 的 mixin %s bind 失败: %s", label, spec, exc)
+                    continue
             bases.append(mixin)
-            applied.append(spec)
+            applied.append(spec or getattr(mixin, "__name__", "?"))
         if not bases:
             results.append({"label": label, "status": "no_mixin"})
             continue
@@ -313,7 +375,7 @@ def apply(config, log=None):
 
 
 def apply_file(path, log=None):
-    return apply(load(path), log=log)
+    return apply(load(path), log=log, base_dir=Path(path).resolve().parent)
 
 
 def uninstall(log=None):
