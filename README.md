@@ -139,6 +139,38 @@ def on_before_store(self, ctx):
 
 它取的就是配置里那个 `log`：写名字 → 按名字 `getLogger`；写 `null` → 回落到 `memtrace.mixin`；不写 → 管理器注入的 logger。
 
+## 示例：给 memory.py 挂诊断
+
+`examples/mem_diag.py` 是一个可直接抄的 mixin，它在 `recall_for` / `render` / `store` / `lessons` / `known_for` 上打印入参与产出：
+
+```json
+{
+  "targets": [{
+    "module": "shrink.services.memory",
+    "class": "MemoryService",
+    "params": {"level": "DEBUG", "log": "mem.diag"},
+    "mixins": [{
+      "file": "mixins/mem_diag.py",
+      "class": "MemoryDiag",
+      "params": {"clip": 60, "full": false, "stack": true}
+    }]
+  }]
+}
+```
+
+`clip` 控制正文截断长度，`full=true` 打全文，`stack=true` 额外打这次调用的来源链——用来判断召回是人格流程调的，还是被别的路径绕过去了。
+
+日志大概长这样：
+
+```
+[diag] recall 入参 speaker=u1 mention=['u2'] window=[] src=g:1 budget=800 limit=6 text='今晚吃什么'
+[diag] recall_for 调用链: reply <- build_context:88 <- on_message:31
+[diag] recall 结果 命中=2 注入=76字 耗时=4.2ms
+[diag]   - id=m1 kind=topic subject=u1 imp=3 conf=0.9 src=g:1 recalls=2 text='他们聊过楼下的面馆…'
+[diag] render rows=2 -> 76字: '关于 u1：…'
+[diag] store kind=topic subject=u2 -> created id=m9
+```
+
 ## 日志长什么样
 
 ```
