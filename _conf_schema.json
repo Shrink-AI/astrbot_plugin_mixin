@@ -1,0 +1,35 @@
+{
+  "config_file": {
+    "type": "string",
+    "description": "mixin 配置文件路径；留空则自动扫描 mixins.json，找不到就生成一份",
+    "default": "",
+    "hint": "留空时按 插件目录 → 工作目录 → data/config 顺序查找；填了相对路径则按插件目录解析"
+  },
+  "reload_interval_s": {
+    "type": "int",
+    "description": "配置文件变更检查间隔(秒)",
+    "default": 3
+  },
+  "target": {
+    "type": "string",
+    "description": "单目标模式：目标模块路径（不含类名）；留空则走配置文件模式",
+    "default": "",
+    "hint": "与 config_file 互斥；填了 target 就不扫描 mixins.json"
+  },
+  "class": {
+    "type": "string",
+    "description": "单目标模式：目标类名",
+    "default": "MemoryService"
+  },
+  "level": {
+    "type": "string",
+    "description": "单目标模式：日志级别",
+    "default": "DEBUG",
+    "hint": "DEBUG 会输出 _score/_similarity 逐条明细；只想看 store/recall 摘要可设为 INFO"
+  },
+  "slow_ms": {
+    "type": "int",
+    "description": "慢调用告警阈值(毫秒)，0 表示关闭",
+    "default": 0
+  }
+}
